@@ -1,0 +1,168 @@
+```{r}
+# Caculate cosine simi for all samples in data
+
+# cosine similarity function
+cosine_similarity <- function(a, b) {
+  sum(a * b) / (sqrt(sum(a * a)) * sqrt(sum(b * b)))
+}
+
+# #----------- colorectal data prepare
+# # Load colorectal data
+# colorectal_df <- read.table(file.choose(), header = TRUE, sep = "\t", comment.char = "#")
+# 
+# # transform data to relative copy number
+# rcn_val <- 2^colorectal_df[,5:ncol(colorectal_df)]
+# colorectal_df[,5:ncol(colorectal_df)] <- rcn_val
+# 
+# # Extract sample columns (exclude chromosome/start/end/feature)
+# sample_cols <- setdiff(colnames(colorectal_df), c("chromosome", "start", "end", "feature"))
+# 
+# # Group samples by prefix
+# # Adjust this regex if needed based on how group names are structured
+# group_names <- sub("^[^_]*_([^_]*).*", "\\1", sample_cols)
+# #------------ end prepare
+
+#----------- EAC data prepare
+# Load data
+colorectal_df <- read.table(file.choose(), header = TRUE, sep = "\t", comment.char = "#")
+
+# transform data to relative copy number
+rcn_val <- 2^colorectal_df[,5:ncol(colorectal_df)]
+colorectal_df[,5:ncol(colorectal_df)] <- rcn_val-1
+
+# Load reference file
+result_ref <- read.table(file.choose(), header = TRUE, sep = "\t") # matlab lpac result
+
+sample_cols <- setdiff(colnames(colorectal_df), c("chromosome", "start", "end", "feature"))
+group_names <- result_ref$patient_id
+#------------ end prepare
+
+# Create a data frame with sample names and group
+sample_info <- data.frame(
+  sample = sample_cols,
+  group = group_names,
+  stringsAsFactors = FALSE
+)
+
+# Function to compute cosine similarity
+cosine_similarity <- function(a, b) {
+  sum(a * b) / (sqrt(sum(a * a)) * sqrt(sum(b * b)))
+}
+
+# Extract just the sample columns (assumes others are: chromosome, start, end, feature)
+value_columns <- sample_info$sample
+
+# Sanity check: ensure all sample columns exist in combined_df
+stopifnot(all(value_columns %in% colnames(colorectal_df)))
+
+# Function to calculate pairwise cosine similarity within a group
+pairwise_cosine_by_group <- function(group_samples, group_name,df) {
+  n <- length(group_samples)
+  
+    if (n < 2) {
+    # Only one sample — return NA
+    return(data.frame(
+      group = group_name,
+      sample1 = group_samples,
+      sample2 = NA,
+      cosine_similarity = NA_real_
+    ))
+  }
+  
+  res <- data.frame()
+  
+  for (i in 1:(n - 1)) {
+    for (j in (i + 1):n) {
+      sample1 <- group_samples[i]
+      sample2 <- group_samples[j]
+      
+      vec1 <- df[[sample1]]
+      vec2 <- df[[sample2]]
+      
+      sim <- cosine_similarity(vec1, vec2)
+      
+      res <- rbind(res, data.frame(
+        group = group_name,
+        sample1 = sample1,
+        sample2 = sample2,
+        cosine_similarity = sim
+      ))
+    }
+  }
+  return(res)
+}
+
+# Apply to each group
+result_df <- do.call(rbind, lapply(unique(sample_info$group), function(g) {
+  group_samples <- sample_info$sample[sample_info$group == g]
+  pairwise_cosine_by_group(group_samples, g, colorectal_df)
+}))
+
+# save result
+write.csv(result_df, file = "EAC_data_cosine_similarity_minus.csv", row.names = FALSE)
+
+
+# Correlation between sample number and similarity value
+library(dplyr)
+
+# Step 1: count number of samples per group
+sample_counts <- sample_info %>%
+  group_by(group) %>%
+  summarise(n_samples = n())
+
+# Step 2: compute mean cosine similarity per group (excluding NAs)
+group_similarity <- result_df %>%
+  group_by(group) %>%
+  summarise(mean_similarity = mean(cosine_similarity, na.rm = TRUE))
+
+# Step 3: join both summaries
+correlation_df <- left_join(sample_counts, group_similarity, by = "group")
+
+# Step 4: compute correlation
+cor_value <- cor(correlation_df$n_samples, correlation_df$mean_similarity, use = "complete.obs")
+
+```
+```{r}
+df_col <- read.csv('colorectal_data_cosine_similarity.csv')
+df_EAC <- read.csv('EAC_data_cosine_similarity.csv')
+summary(df_col$cosine_similarity)
+summary(df_EAC$cosine_similarity)
+
+clean_data <- na.omit(df_EAC)
+
+hist(clean_data$cosine_similarity, 
+     main = "Histogram", 
+     xlab = "cosine similarity",
+     breaks = 100,
+     xlim = c(0.9,1))
+```
+
+```{r}
+# Caculate sd in samples
+# Load colorectal data
+data_df <- read.table(file.choose(), header = TRUE, sep = "\t", comment.char = "#")
+result_ref <- read.table(file.choose(), header = TRUE, sep = "\t", comment.char = "#")
+```
+```{r}
+# transform data to relative copy number
+rcn_val <- 2^data_df[,5:ncol(data_df)]
+sample_info <- result_ref[,c('samplenames','patient_id')]
+
+sd_list <- apply(rcn_val, 2, sd, na.rm = TRUE)
+mean_list <- apply(rcn_val, 2, mean, na.rm = TRUE)
+
+sd_df <- data.frame(
+  samplenames = names(sd_list),
+  sd = as.numeric(log2(sd_list)),
+  mean = as.numeric(mean_list)
+)
+
+merged_df <- merge(sample_info, sd_df, by = "samplenames")
+
+hist(merged_df$sd, 
+     main = "Histogram", 
+     xlab = "log2 standard deviation",
+     breaks = 100,
+     xlim = c(-8,1))
+```
+

@@ -1,0 +1,294 @@
+```{r}
+# Load data. data is copy number value file, result is the LPAC output file or 
+# other file contains purity and ploidy info
+data <- read.table(file.choose(), header = TRUE, sep = "\t", comment.char = "#")
+# result_ref <- read.table(file.choose(), header = TRUE, sep = "\t") # matlab lpac result
+result <- read.csv(file.choose()) # r lpac result
+```
+
+```{r}
+# Plot heatmap of paired consine similarity relative copy number in one patient group
+library(pheatmap)
+
+# Define a function to calculate cosine similarity
+cosine_similarity <- function(a, b) {
+  sum(a * b) / (sqrt(sum(a * a)) * sqrt(sum(b * b)))
+}
+
+# transform data to relative copy number
+rcn_val <- 2^data[,5:ncol(data)]
+# Normalize each column (sample) to have mean ~1
+# rcn_val <- sweep(rcn_val, 2, colMeans(bin_val), "/")
+
+rcn_data <- data
+rcn_data[,5:ncol(data)] <- rcn_val
+```
+```{r}
+# extract specific samples
+samplenames <- result_ref[result_ref$patient_id == 15,"samplenames"]
+data_val <- rcn_val[,samplenames]
+
+# Compute pairwise function values
+mat <- outer(samplenames, samplenames, Vectorize(function(x, y) cosine_similarity(data_val[[x]], data_val[[y]])))
+
+
+# Convert to numeric matrix
+mat <- matrix(as.numeric(mat), nrow = length(samplenames), dimnames = list(samplenames, samplenames))
+
+pheatmap(mat)
+```
+
+
+```{r}
+# transform relative copy number to absolute copy number
+convert_rcn <- function(value, purity, ploidy){
+  a1 <- (purity*ploidy+2*(1-purity))/purity
+  a2 <- 2*(1-purity)/purity
+  q <- a1*value - a2
+  return(q)
+}
+
+# convert matlab data
+val_start <- 5 # change here if your table's value doesn't start from 5th col
+bin_val <- data[,val_start:ncol(data)]
+bin_val <- 2^bin_val  # power of 2 transform
+for (i in colnames(bin_val)){
+  purity <- result_ref[result_ref$samplenames==i,'purities_multi']
+  ploidy <- result_ref[result_ref$samplenames==i,'ploidies_multi']
+  bin_val[,i] <- convert_rcn(bin_val[,i],purity,ploidy)
+}
+
+abs_data_ref <- data
+abs_data_ref[,val_start:ncol(data)] <- bin_val
+colnames(abs_data_ref)[val_start:ncol(data)] <- paste0(colnames(abs_data_ref)[val_start:ncol(data)], "_ref") # add suffix
+
+# convert r data
+bin_val <- data[,val_start:ncol(data)]
+bin_val <- 2^bin_val  # power of 2 transform
+for (i in colnames(bin_val)){
+  purity <- result[result$sample_name==i,'purities']
+  ploidy <- result[result$sample_name==i,'ploidies']
+  bin_val[,i] <- convert_rcn(bin_val[,i],purity,ploidy)
+}
+
+abs_data <- data
+abs_data[,val_start:ncol(data)] <- bin_val
+
+# combine two abs copy number data
+combine_abs <- cbind(abs_data,abs_data_ref[,val_start:ncol(data)])
+```
+
+```{r}
+
+library(ggplot2)
+library(dplyr)
+# Define a function to calculate cosine similarity
+cosine_similarity <- function(a, b) {
+  sum(a * b) / (sqrt(sum(a * a)) * sqrt(sum(b * b)))
+}
+
+# copy number profile plotting
+plot_genome_cn <- function(data,
+                           chrom_col = "chromosome",
+                           start_col = "start",
+                           end_col = "end",
+                           cn_col = "samplenames", # the name of column where is copy number
+                           min_cn = NULL,
+                           max_cn = NULL,
+                           line_size = 0.9) {
+  
+  # confirm the column names
+  data <- data %>%
+    rename(
+      Chromosome = !!sym(chrom_col),
+      Start = !!sym(start_col),
+      End = !!sym(end_col),
+      CopyNumber = !!sym(cn_col)
+    )
+  
+  # sort chromosome
+  chr_lengths <- data %>%
+    group_by(Chromosome) %>%
+    summarize(chr_length = max(End), .groups = "drop") %>%
+    arrange(as.numeric(as.character(Chromosome))) %>%
+    mutate(offset = lag(cumsum(as.numeric(chr_length)), default = 0))
+  
+  # 加入偏移量 + 拼接坐标
+  data_offset <- data %>%
+    left_join(chr_lengths, by = "Chromosome") %>%
+    mutate(
+      Start_genome = as.numeric(Start) + offset,
+      End_genome = as.numeric(End) + offset
+    )
+  
+  # define Y axis
+  y_min <- if (!is.null(min_cn)) min_cn else floor(min(data_offset$CopyNumber, na.rm = TRUE)) - 0.5
+  y_max <- if (!is.null(max_cn)) max_cn else ceiling(max(data_offset$CopyNumber, na.rm = TRUE)) + 0.5
+  
+  # plot
+  p <- ggplot(data_offset, aes(x = Start_genome, xend = End_genome, y = CopyNumber, yend = CopyNumber)) +
+    geom_segment(size = line_size, color = 'red') +
+    geom_vline(xintercept = chr_lengths$offset, color = "gray80", linetype = "dashed") +
+    scale_x_continuous(
+      breaks = chr_lengths$offset + chr_lengths$chr_length / 2,
+      labels = paste0(chr_lengths$Chromosome),
+      expand = expansion(mult = c(0.01, 0.01))
+    ) +
+    scale_y_continuous(limits = c(y_min, y_max), expand = expansion(mult = c(0.05, 0.05))) +
+    labs(
+      title = paste0("Whole Genome Copy Number Profile_",cn_col),
+      x = "Chromosomes",
+      y = "Copy number value"
+    ) +
+    theme_minimal(base_size = 14) +
+    theme(
+      axis.text.x = element_text(angle = 45, hjust = 1),
+      panel.grid.major.x = element_blank()
+    )
+  
+  return(p)
+}
+
+
+library(tidyr)
+# copy number profile for multi samples
+plot_genome_cn_multi <- function(data,
+                                 chrom_col = "chromosome",
+                                 start_col = "start",
+                                 end_col = "end",
+                                 sample_cols = c("sample1", "sample2", "sample3"), # multiple samples
+                                 sample_colors = NULL,
+                                 min_cn = NULL,
+                                 max_cn = 20,
+                                 line_size = 0.9) {
+  
+  # rename columns
+  data <- data %>%
+    rename(
+      Chromosome = !!sym(chrom_col),
+      Start = !!sym(start_col),
+      End = !!sym(end_col)
+    )
+  
+  # reshape to long format
+  data_long <- data %>%
+    pivot_longer(
+      cols = all_of(sample_cols),
+      names_to = "Sample",
+      values_to = "CopyNumber"
+    ) %>% 
+    mutate(Sample = factor(Sample, levels = sample_cols))
+  
+  # sort chromosomes and calculate offsets
+  chr_lengths <- data_long %>%
+    group_by(Chromosome) %>%
+    summarize(chr_length = max(End), .groups = "drop") %>%
+    arrange(as.numeric(as.character(Chromosome))) %>%
+    mutate(offset = lag(cumsum(as.numeric(chr_length)), default = 0))
+  
+  # add offsets
+  data_offset <- data_long %>%
+    left_join(chr_lengths, by = "Chromosome") %>%
+    mutate(
+      Start_genome = as.numeric(Start) + offset,
+      End_genome = as.numeric(End) + offset
+    )
+  
+  # define Y axis
+  y_min <- if (!is.null(min_cn)) min_cn else floor(min(data_offset$CopyNumber, na.rm = TRUE)) - 0.5
+  y_max <- if (!is.null(max_cn)) max_cn else ceiling(max(data_offset$CopyNumber, na.rm = TRUE)) + 0.5
+  
+  # caculate consine
+  cos1 <- round(cosine_similarity(data[,sample_cols[1]],data[,sample_cols[2]]),2)
+  cos2 <- round(cosine_similarity(data[,sample_cols[1]],data[,sample_cols[3]]),2)
+  
+  # plot
+  p <- ggplot(data_offset, aes(x = Start_genome, xend = End_genome, y = CopyNumber, yend = CopyNumber, color = Sample)) +
+    geom_segment(size = line_size) +
+    geom_vline(xintercept = chr_lengths$offset, color = "gray80", linetype = "dashed")
+  # Conditional color override
+  if (!is.null(sample_colors)) {
+    p <- p + scale_color_manual(values = sample_colors)
+  }
+  p <- p +
+    scale_x_continuous(
+      breaks = chr_lengths$offset + chr_lengths$chr_length / 2,
+      labels = paste0(chr_lengths$Chromosome),
+      expand = expansion(mult = c(0.01, 0.01))
+    ) +
+    scale_y_continuous(
+      limits = c(y_min, y_max),
+      breaks = seq(ceiling(y_min), floor(y_max), by = 0.1),  # force integer ticks
+      expand = expansion(mult = c(0.05, 0.05))
+    ) +
+    labs(
+      title = "Whole Genome Copy Number Profile (Multiple Samples)",
+      x = "Chromosomes",
+      y = "Copy number value",
+      color = 'Sample' # add legend or text here
+    ) +
+    theme_minimal(base_size = 14) +
+    theme(
+      axis.text.x = element_text(angle = 45, hjust = 1),
+      panel.grid.major.x = element_blank(),
+      legend.title = element_text(size = 10)
+    )
+  
+  return(p)
+}
+
+```
+
+```{r}
+# cosine similarity between matlab and r
+df <- combine_abs[,val_start:ncol(combine_abs)]
+original_cols <- colnames(data[,val_start:ncol(data)])
+cos_result <- list()
+for (i in original_cols){
+  i_ref <- paste0(i,'_ref')
+  cosine <- cosine_similarity(df[,i],df[,i_ref])
+  cos_result <- append(cos_result,cosine)
+}
+cosine_result <- data.frame(sample_name=original_cols,cosine=unlist(cos_result))
+boxplot(cosine_result$cosine,
+        main = "R vs Matlab Cosine Similarities",
+        ylab = "Cosine Similarity",
+        col = "lightblue",
+        border = "blue")
+```
+
+```{r}
+# multi profile plot (2 results compare)
+# loop over samples in one id
+id <- 1
+samplenames <- result_ref[result_ref$patient_id==id,"samplenames"] # change col name here
+
+for (samplename in samplenames){
+  ggsave(paste0(samplename,"_mutli_compare_profile.png"), 
+         plot = plot_genome_cn_multi(combine_abs,sample_cols=c(samplename,paste0(samplename,'_ref'),'CF24766')), 
+         width = 16, height = 5, dpi = 300)}
+```
+
+```{r}
+# multi profile plot
+id <- 10
+samplenames <- result_ref[result_ref$patient_id==id,"samplenames"]
+
+rcn_minus <- rcn_data
+rcn_minus[,5:ncol(data)] <- rcn_data[,5:ncol(data)] - 1
+ggsave(paste0('p',id,'_rcn',"_mutli_profile.png"), 
+        plot = plot_genome_cn_multi(rcn_minus,sample_cols=c("CF25490", "CF25492", "CF25522", "CF26052", "CF26057", "CF26059", "CF27024", "CF27026"), sample_colors =c('red','orange','seagreen','seagreen','seagreen','seagreen','purple','seagreen') ,max_cn=0.1,min_cn=-0.1), 
+         width = 16, height = 5, dpi = 300)
+```
+
+
+
+```{r}
+# single profile plot
+# loop over samples in one id
+id <- 15
+samplenames <- result_ref[result_ref$patient_id==id,"samplenames"] # change col name here
+
+for (samplename in samplenames){
+  ggsave(paste0(samplename,"_rcn_profile.png"), plot = plot_genome_cn(rcn_data,cn_col=samplename), width = 16, height = 5, dpi = 300)}
+```

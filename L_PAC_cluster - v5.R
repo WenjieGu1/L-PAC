@@ -84,6 +84,7 @@ sdr <- function(val,len){
 #  of equal size. With Nb the number of bins, and Ns the number of multi-region samples.
 #  seg_val     : Nb x Ns size array containing values of segment length.
 #  Cval        : define the cut-off consine similarity value
+#  Dmin <- 1   : define initial minimum absCNA distance(CNH)
 ## OUTPUT: 
 #  LPAC_success: Binary variable with 1 if LPAC inference was succesfull and 0 if unsuccesfull
 #  ploidies    : Ns x 1 size vector containing the tumor ploidies
@@ -93,7 +94,7 @@ sdr <- function(val,len){
 #  inference is identified
 # **added a Test to Dtest
 # **changed Dmin value, changed CNH input
-LPAC <- function(bin_val,seg_len=NULL, n_group=1, CNHout=NA, ploidies=NA, purities=NA, sds=NULL, Cval=0.98) {
+cluster_LPAC <- function(bin_val,seg_len=NULL, n_group=1, CNHout=NA, ploidies=NA, purities=NA, sds=NULL, Cval=0.96, Dmin=1) {
   
   # Determine sample size and number of bins
   Nb <- nrow(bin_val)
@@ -169,8 +170,6 @@ LPAC <- function(bin_val,seg_len=NULL, n_group=1, CNHout=NA, ploidies=NA, puriti
     # Loop over non-best samples
     ids <- which(!best_sample)
     for (i in ids) {
-      Dmin <- 1 # define initial minimum absCNA distance
-
       D_neverless <- TRUE # define if the distance is never less than Dmin
       bin_val_test <- bin_val[, i]
       seg_len_test <- seg_len[, i]
@@ -222,7 +221,7 @@ LPAC <- function(bin_val,seg_len=NULL, n_group=1, CNHout=NA, ploidies=NA, puriti
     
     # new LPAC for new cluster
     if (length(new_cluster_id) != 0) {
-      new_result <- LPAC(bin_val =  bin_val[,new_cluster_id,drop = FALSE], # make sure df format
+      new_result <- cluster_LPAC(bin_val =  bin_val[,new_cluster_id,drop = FALSE], # make sure df format
                          seg_len = seg_len[,new_cluster_id,drop = FALSE],
                          n_group=n_group+1,
                          CNHout=CNHout[new_cluster_id], 
@@ -400,9 +399,9 @@ refine_search <- function(seg_val, seg_len, ploidy_out, purity_out, refine_range
     purity = purity_out
   ))
 }
-```
 
-```{r}
+
+
 # function to create a uniform segment length for the inconsistent segment length
 create_sequence_df <- function(df, chrom, max_iterations = 500) {
   # 输入验证
@@ -515,7 +514,7 @@ create_segment_val <- function(splited_data){
   # remove NA rows
   result_df <- na.omit(result_df)
   # extract segment value and length
-  seg_val <- result_df[,4:ncol(result_df)]
+  seg_val <- result_df[,4:ncol(result_df),drop=FALSE]
   seg_len <- seg_val
   len <- result_df$end - result_df$start
   for (col in colnames(seg_val)){
@@ -574,13 +573,13 @@ run_multi_patient <- function(bin_val,data_id,path,seg_len=NULL,segment=FALSE){
       if(is.null(seg_len)){splited_len <- NULL}
       else{splited_len<-seg_len[,selected_samples]}
       # Subset bin_val to select columns corresponding to the selected sample names
-      splited_data <- bin_val[,selected_samples]
+      splited_data <- bin_val[,selected_samples,drop=FALSE]
       }
   
     # Use tryCatch to handle errors
     result <- tryCatch({
       # Apply the LPAC function
-      LPAC(bin_val = splited_data, seg_len = splited_len)
+      cluster_LPAC(bin_val = splited_data, seg_len = splited_len)
     }, error = function(e) {
       # In case of error, return NULL or some default value
       message(paste("Error with patient_id:", id, "-", conditionMessage(e)))  # Print message without stopping
@@ -618,7 +617,7 @@ run_multi_patient <- function(bin_val,data_id,path,seg_len=NULL,segment=FALSE){
   # Output result
   write.csv(results_df, path, row.names = FALSE)
 }
-path <- "LPAC_v5_EPICC_92_0015_result.csv"
+path <- "LPAC_v5_EPICC_96_0015_result.csv"
 run_multi_patient(bin_val = bin_val, data_id = data_id, segment = FALSE, path = path)
 ```
 
@@ -629,19 +628,19 @@ library(dplyr)
 
 # Get sample names that belong to specific id
 selected_samples <- data_id %>%
-  filter(patient_id == 'CRUK0062') %>%
+  filter(patient_id == 'C547') %>%
   pull(samplenames)
 
-# Subset bin_val to select columns corresponding to the selected sample names
-splited_data <- cbind(data[,1:4],data[, selected_samples])
-result <- create_segment_val(splited_data)
-seg_val <- result$seg_val
-seg_len <- result$seg_len
-# Normalize each column (sample) to have mean ~1
-seg_val <- sweep(seg_val, 2, colMeans(seg_val), "/")
+# # Subset bin_val to select columns corresponding to the selected sample names
+# splited_data <- cbind(data[,1:4],data[, selected_samples])
+# result <- create_segment_val(splited_data)
+# seg_val <- result$seg_val
+# seg_len <- result$seg_len
+# # Normalize each column (sample) to have mean ~1
+# seg_val <- sweep(seg_val, 2, colMeans(seg_val), "/")
 
 # Apply method
-result <- LPAC(bin_val =  seg_val, seg_len = seg_len)
+result <- cluster_LPAC(bin_val =  bin_val[,selected_samples,drop=FALSE])
 mat <- do.call(cbind,result)
 
 ```

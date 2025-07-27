@@ -1,84 +1,4 @@
 ```{r}
-# Load data. data is copy number value file, result is the LPAC output file or 
-# other file contains purity and ploidy info
-data <- read.table(file.choose(), header = TRUE, sep = "\t", comment.char = "#")
-# result_ref <- read.table(file.choose(), header = TRUE, sep = "\t") # matlab lpac result
-result <- read.csv(file.choose()) # r lpac result
-```
-
-```{r}
-# Plot heatmap of paired consine similarity relative copy number in one patient group
-library(pheatmap)
-
-# Define a function to calculate cosine similarity
-cosine_similarity <- function(a, b, w) {
-  sum(a * b * w) / (sqrt(sum(a * a * w)) * sqrt(sum(b * b * w)))
-}
-
-# transform data to relative copy number
-rcn_val <- 2^data[,5:ncol(data)]
-# Normalize each column (sample) to have mean ~1
-# rcn_val <- sweep(rcn_val, 2, colMeans(bin_val), "/")
-
-rcn_data <- data
-rcn_data[,5:ncol(data)] <- rcn_val
-```
-```{r}
-# extract specific samples
-samplenames <- result_ref[result_ref$patient_id == 15,"samplenames"]
-data_val <- rcn_val[,samplenames]
-
-# Compute pairwise function values
-mat <- outer(samplenames, samplenames, Vectorize(function(x, y) cosine_similarity(data_val[[x]], data_val[[y]])))
-
-
-# Convert to numeric matrix
-mat <- matrix(as.numeric(mat), nrow = length(samplenames), dimnames = list(samplenames, samplenames))
-
-pheatmap(mat)
-```
-
-
-```{r}
-# transform relative copy number to absolute copy number
-convert_rcn <- function(value, purity, ploidy){
-  a1 <- (purity*ploidy+2*(1-purity))/purity
-  a2 <- 2*(1-purity)/purity
-  q <- a1*value - a2
-  return(q)
-}
-
-# convert matlab data
-val_start <- 5 # change here if your table's value doesn't start from 5th col
-bin_val <- data[,val_start:ncol(data)]
-bin_val <- 2^bin_val  # power of 2 transform
-for (i in colnames(bin_val)){
-  purity <- result_ref[result_ref$samplenames==i,'purities_multi']
-  ploidy <- result_ref[result_ref$samplenames==i,'ploidies_multi']
-  bin_val[,i] <- convert_rcn(bin_val[,i],purity,ploidy)
-}
-
-abs_data_ref <- data
-abs_data_ref[,val_start:ncol(data)] <- bin_val
-colnames(abs_data_ref)[val_start:ncol(data)] <- paste0(colnames(abs_data_ref)[val_start:ncol(data)], "_ref") # add suffix
-
-# convert r data
-bin_val <- data[,val_start:ncol(data)]
-bin_val <- 2^bin_val  # power of 2 transform
-for (i in colnames(bin_val)){
-  purity <- result[result$sample_name==i,'purities']
-  ploidy <- result[result$sample_name==i,'ploidies']
-  bin_val[,i] <- convert_rcn(bin_val[,i],purity,ploidy)
-}
-
-abs_data <- data
-abs_data[,val_start:ncol(data)] <- bin_val
-
-# combine two abs copy number data
-combine_abs <- cbind(abs_data,abs_data_ref[,val_start:ncol(data)])
-```
-
-```{r}
 
 library(ggplot2)
 library(dplyr)
@@ -239,6 +159,90 @@ plot_genome_cn_multi <- function(data,
 
 ```
 
+
+# check EAC data
+```{r}
+# Load data. data is copy number value file, result is the LPAC output file or 
+# other file contains purity and ploidy info
+data <- read.table(file.choose(), header = TRUE, sep = "\t", comment.char = "#")
+result_ref <- read.table(file.choose(), header = TRUE, sep = "\t") # matlab lpac result
+# result <- read.csv(file.choose()) # r lpac result
+```
+
+```{r}
+# Plot heatmap of paired consine similarity relative copy number in one patient group
+library(pheatmap)
+
+# Define a function to calculate cosine similarity
+cosine_similarity <- function(a, b, w) {
+  sum(a * b * w) / (sqrt(sum(a * a * w)) * sqrt(sum(b * b * w)))
+}
+
+# transform data to relative copy number
+rcn_val <- 2^data[,5:ncol(data)]
+# Normalize each column (sample) to have mean ~1
+# rcn_val <- sweep(rcn_val, 2, colMeans(bin_val), "/")
+
+rcn_data <- data
+rcn_data[,5:ncol(data)] <- rcn_val
+```
+```{r}
+# extract specific samples
+samplenames <- result_ref[result_ref$patient_id == 15,"samplenames"]
+data_val <- rcn_val[,samplenames]
+
+# Compute pairwise function values
+mat <- outer(samplenames, samplenames, Vectorize(function(x, y) cosine_similarity(data_val[[x]], data_val[[y]])))
+
+
+# Convert to numeric matrix
+mat <- matrix(as.numeric(mat), nrow = length(samplenames), dimnames = list(samplenames, samplenames))
+
+pheatmap(mat)
+```
+
+
+```{r}
+# transform relative copy number to absolute copy number
+convert_rcn <- function(value, purity, ploidy){
+  a1 <- (purity*ploidy+2*(1-purity))/purity
+  a2 <- 2*(1-purity)/purity
+  q <- a1*value - a2
+  return(q)
+}
+
+# convert matlab data
+val_start <- 5 # change here if your table's value doesn't start from 5th col
+bin_val <- data[,val_start:ncol(data)]
+bin_val <- 2^bin_val  # power of 2 transform
+for (i in colnames(bin_val)){
+  purity <- result_ref[result_ref$samplenames==i,'purities_multi']
+  ploidy <- result_ref[result_ref$samplenames==i,'ploidies_multi']
+  bin_val[,i] <- convert_rcn(bin_val[,i],purity,ploidy)
+}
+
+abs_data_ref <- data
+abs_data_ref[,val_start:ncol(data)] <- bin_val
+colnames(abs_data_ref)[val_start:ncol(data)] <- paste0(colnames(abs_data_ref)[val_start:ncol(data)], "_ref") # add suffix
+
+# convert r data
+bin_val <- data[,val_start:ncol(data)]
+bin_val <- 2^bin_val  # power of 2 transform
+for (i in colnames(bin_val)){
+  purity <- result[result$sample_name==i,'purities']
+  ploidy <- result[result$sample_name==i,'ploidies']
+  bin_val[,i] <- convert_rcn(bin_val[,i],purity,ploidy)
+}
+
+abs_data <- data
+abs_data[,val_start:ncol(data)] <- bin_val
+
+# combine two abs copy number data
+combine_abs <- cbind(abs_data,abs_data_ref[,val_start:ncol(data)])
+```
+
+
+
 ```{r}
 # cosine similarity between matlab and r
 df <- combine_abs[,val_start:ncol(combine_abs)]
@@ -277,7 +281,9 @@ samplenames <- result_ref[result_ref$patient_id==id,"samplenames"]
 rcn_minus <- rcn_data
 rcn_minus[,5:ncol(data)] <- rcn_data[,5:ncol(data)] - 1
 ggsave(paste0('p',id,'_rcn',"_mutli_profile.png"), 
-        plot = plot_genome_cn_multi(rcn_minus,sample_cols=c("CF25490", "CF25492", "CF25522", "CF26052", "CF26057", "CF26059", "CF27024", "CF27026"), sample_colors =c('red','orange','seagreen','seagreen','seagreen','seagreen','purple','seagreen') ,max_cn=0.1,min_cn=-0.1), 
+        plot = plot_genome_cn_multi(rcn_minus,sample_cols=c("CF25490", "CF25492", "CF27024", "CF25522", "CF26052", "CF26057", "CF26059", "CF27026"),
+                                    sample_colors =c('red','orange','purple','seagreen','seagreen','seagreen','seagreen','seagreen')
+                                    ,max_cn=0.1,min_cn=-0.1), 
          width = 16, height = 5, dpi = 300)
 ```
 

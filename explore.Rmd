@@ -1,3 +1,4 @@
+# EAC and EPICC
 ```{r}
 # Caculate cosine simi for all samples in data
 
@@ -123,12 +124,10 @@ cor_value <- cor(correlation_df$n_samples, correlation_df$mean_similarity, use =
 ```
 ```{r}
 # Plot histogram
-df_col <- read.csv('colorectal_data_cosine_similarity.csv')
-df_EAC <- read.csv('EAC_data_cosine_similarity.csv')
-summary(df_col$cosine_similarity)
-summary(df_EAC$cosine_similarity)
+df <- read.csv('colorectal_data_cosine_similarity.csv')
+# df <- read.csv('EAC_data_cosine_similarity.csv')
 
-clean_data <- na.omit(df_EAC)
+clean_data <- na.omit(df)
 
 hist(clean_data$cosine_similarity, 
      main = "Histogram", 
@@ -137,6 +136,37 @@ hist(clean_data$cosine_similarity,
      xlim = c(0.9,1))
 ```
 
+```{r}
+# Caculate sd in samples
+# Load colorectal data
+data_df <- read.table(file.choose(), header = TRUE, sep = "\t", comment.char = "#")
+result_ref <- read.csv(file.choose(), header = TRUE)
+```
+```{r}
+# transform data to relative copy number
+rcn_val <- 2^data_df[,5:ncol(data_df)]
+sample_info <- result_ref[,c('samplenames','patient_id')]
+
+sd_list <- apply(rcn_val, 2, sd, na.rm = TRUE)
+mean_list <- apply(rcn_val, 2, mean, na.rm = TRUE)
+
+sd_df <- data.frame(
+  samplenames = names(sd_list),
+  sd = as.numeric(log2(sd_list)),
+  mean = as.numeric(mean_list)
+)
+
+merged_df <- merge(sample_info, sd_df, by = "samplenames")
+
+hist(merged_df$sd, 
+     main = "Histogram", 
+     xlab = "log2 standard deviation",
+     breaks = 100,
+     xlim = c(-8,1))
+```
+
+
+# NSCLS
 ```{r}
 # Caculate cosine simi for all samples in NSCLS data
 # cosine similarity function
@@ -180,13 +210,27 @@ pairwise_cosine_by_group <- function(group_samples, group_name,df) {
   return(res)
 }
 
+# Define a function to calculate weighted standard deviation
+sdr <- function(val,len){
+  # Calculate weighted mean
+  weighted_mean <- sum(val * len) / sum(len)
+  
+  # Calculate weighted variance
+  weighted_var <- sum(len * (val - weighted_mean)^2) / sum(len)
+  
+  # Return weighted standard deviation
+  return(sqrt(weighted_var))
+}
+
 # Set the folder path
 folder_path <- "../../Data/TraceX_NSCLS/nscls_segments"
 
 # Get all CSV files in the folder
 csv_files <- list.files(folder_path, pattern = "*.csv", full.names = TRUE)
 
-result <- data.frame(
+sd_list <- list()
+
+csr_result <- data.frame(
       group = character(),
       sample1 = character(),
       sample2 = character(),
@@ -205,47 +249,31 @@ for (file in csv_files) {
   
   res <- pairwise_cosine_by_group(group_samples, filename, data)
   
-  result <- rbind(result,res)
+  csr_result <- rbind(csr_result,res)
+  
+  for (sample in group_samples){
+    sd_list <- append(sd_list, log2(sdr(data[[sample]],data$length)))
+  }
 }
 ```
 ```{r}
 # Plot histogram
 
-clean_data <- na.omit(result)
+clean_data <- na.omit(csr_result)
 
 hist(clean_data$cosine_similarity, 
      main = "Histogram", 
      xlab = "cosine similarity",
      breaks = 100,
      xlim = c(0.9,1))
-```
 
-```{r}
-# Caculate sd in samples
-# Load colorectal data
-data_df <- read.table(file.choose(), header = TRUE, sep = "\t", comment.char = "#")
-result_ref <- read.table(file.choose(), header = TRUE, sep = "\t", comment.char = "#")
-```
-```{r}
-# transform data to relative copy number
-rcn_val <- 2^data_df[,5:ncol(data_df)]
-sample_info <- result_ref[,c('samplenames','patient_id')]
-
-sd_list <- apply(rcn_val, 2, sd, na.rm = TRUE)
-mean_list <- apply(rcn_val, 2, mean, na.rm = TRUE)
-
-sd_df <- data.frame(
-  samplenames = names(sd_list),
-  sd = as.numeric(log2(sd_list)),
-  mean = as.numeric(mean_list)
-)
-
-merged_df <- merge(sample_info, sd_df, by = "samplenames")
-
-hist(merged_df$sd, 
+hist(as.numeric(sd_list), 
      main = "Histogram", 
      xlab = "log2 standard deviation",
      breaks = 100,
      xlim = c(-8,1))
+
 ```
+
+
 

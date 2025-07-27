@@ -297,10 +297,10 @@ result_plot_data %>%
 # Load data
 # df_data <- read.table(file.choose(), header = TRUE, sep = "\t", comment.char = "#") # only copy number transform need it
 
-df_ref <- read.csv(file.choose(), header = TRUE) # for EPICC or NSCLS csv file
+# df_ref <- read.csv(file.choose(), header = TRUE) # for EPICC or NSCLS csv file
+df_ref <- read.table(file.choose(), header = TRUE, sep = "\t") # only for EAC table
 
-# df_ref <- read.table(file.choose(), header = TRUE, sep = "\t") # only for EAC table
-# # Sort by patient_id, then samplename; only for EAC and NSCLS ref file
+# Sort by patient_id, then samplename; only for EAC and NSCLS ref file
 df_ref <- df_ref[order(df_ref$patient_id, df_ref$samplenames), ]
 
 df_result <- read.csv(file.choose(), header = TRUE)
@@ -313,25 +313,25 @@ mse <- function(actual, predicted) {
 }
 library(dplyr)
 
-# # EAC
-# success_rate <- nrow(df_result[df_result$LPAC_success ==TRUE,])/nrow(df_result)
-# samples_im <- df_ref[!is.na(df_ref$purities_im),"samplenames"]
-# 
-# samples_evaluate <- df_result %>%
-#   filter(LPAC_success == TRUE, sample_name %in% samples_im) %>%
-#   pull(sample_name)
-# 
-# purity_mse <- mse(df_ref[df_ref$samplenames %in% samples_evaluate,"purities_im"],df_result[df_result$sample_name %in% samples_evaluate,"purities"])
-
-# EPICC or NSCLS
+# EAC
 success_rate <- nrow(df_result[df_result$LPAC_success ==TRUE,])/nrow(df_result)
-samples_im <- df_ref[!is.na(df_ref$purities),"samplenames"] # sample that have reference
+samples_im <- df_ref[!is.na(df_ref$purities_im),"samplenames"]
 
 samples_evaluate <- df_result %>%
   filter(LPAC_success == TRUE, sample_name %in% samples_im) %>%
   pull(sample_name)
 
-purity_mse <- mse(df_ref[df_ref$samplenames %in% samples_evaluate,"purities"],df_result[df_result$sample_name %in% samples_evaluate,"purities"])
+purity_mse <- mse(df_ref[df_ref$samplenames %in% samples_evaluate,"purities_im"],df_result[df_result$sample_name %in% samples_evaluate,"purities"])
+
+# # EPICC or NSCLS
+# success_rate <- nrow(df_result[df_result$LPAC_success ==TRUE,])/nrow(df_result)
+# samples_im <- df_ref[!is.na(df_ref$purities),"samplenames"] # sample that have reference
+# 
+# samples_evaluate <- df_result %>%
+#   filter(LPAC_success == TRUE, sample_name %in% samples_im) %>%
+#   pull(sample_name)
+# 
+# purity_mse <- mse(df_ref[df_ref$samplenames %in% samples_evaluate,"purities"],df_result[df_result$sample_name %in% samples_evaluate,"purities"])
 ```
 
 ```{r}
@@ -446,17 +446,26 @@ library(tidyr)
 library(patchwork)
 
 # 创建数据框
+# df <- data.frame(
+#   data_method = c("L-PAC on EAC", "cluster-LPAC on EAC",
+#                   "L-PAC on EPICC", "cluster-LPAC on EPICC",
+#                   "L-PAC on NSCLC", "cluster-LPAC on NSCLS"),
+#   dataset = c("EAC", "EAC", "EPICC", "EPICC", "NSCLC", "NSCLC"),
+#   method = c("L-PAC", "cluster-LPAC", "L-PAC", "cluster-LPAC", "L-PAC", "cluster-LPAC"),
+#   successful_inference_rate = c(0.85875, 0.77401, 0.75971, 0.70671, 0.82838, 0.73927),
+#   mse_successful = c(0.09267, 0.07123, 0.04434, 0.02653, 0.08625, 0.04029),
+#   mse_excluded = c(0.40684, 0.13761, 0.02966, 0.02609, 0.07018, 0.05406)
+# )
 df <- data.frame(
   data_method = c("L-PAC on EAC", "cluster-LPAC on EAC",
                   "L-PAC on EPICC", "cluster-LPAC on EPICC",
-                  "L-PAC on NSCLS", "cluster-LPAC on NSCLS"),
-  dataset = c("EAC", "EAC", "EPICC", "EPICC", "NSCLS", "NSCLS"),
+                  "L-PAC on NSCLC", "cluster-LPAC on NSCLS"),
+  dataset = c("EAC", "EAC", "EPICC", "EPICC", "NSCLC", "NSCLC"),
   method = c("L-PAC", "cluster-LPAC", "L-PAC", "cluster-LPAC", "L-PAC", "cluster-LPAC"),
   successful_inference_rate = c(0.85875, 0.77401, 0.75971, 0.75618, 0.82838, 0.83498),
-  mse_successful = c(0.13357, 0.07123, 0.04434, 0.04351, 0.08625, 0.03889),
+  mse_successful = c(0.09267, 0.07123, 0.04434, 0.04351, 0.08625, 0.03889),
   mse_excluded = c(0.40684, 0.13761, NA, NA, NA, NA)
 )
-
 # 转换成长格式
 df_long <- df %>%
   pivot_longer(cols = c(successful_inference_rate, mse_successful, mse_excluded),
@@ -477,8 +486,8 @@ plot_metric <- function(metric_name, custom_title) {
 
 # 使用自定义标题调用
 plot1 <- plot_metric("successful_inference_rate", "Successful Inference Rate")
-plot2 <- plot_metric("mse_successful", "MSE on Successfully Inferred Samples")
-plot3 <- plot_metric("mse_excluded", "MSE on Samples Excluded from Cluster 1")
+plot2 <- plot_metric("mse_successful", "MSE of Successfully Inferred Samples")
+plot3 <- plot_metric("mse_excluded", "MSE of Samples Excluded from Cluster 1")
 
 # 并排组合，并合并图例，放在下方
 combined_plot <- (plot1 + plot2 + plot3) +

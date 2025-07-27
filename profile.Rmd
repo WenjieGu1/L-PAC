@@ -11,8 +11,8 @@ result <- read.csv(file.choose()) # r lpac result
 library(pheatmap)
 
 # Define a function to calculate cosine similarity
-cosine_similarity <- function(a, b) {
-  sum(a * b) / (sqrt(sum(a * a)) * sqrt(sum(b * b)))
+cosine_similarity <- function(a, b, w) {
+  sum(a * b * w) / (sqrt(sum(a * a * w)) * sqrt(sum(b * b * w)))
 }
 
 # transform data to relative copy number
@@ -281,8 +281,6 @@ ggsave(paste0('p',id,'_rcn',"_mutli_profile.png"),
          width = 16, height = 5, dpi = 300)
 ```
 
-
-
 ```{r}
 # single profile plot
 # loop over samples in one id
@@ -291,4 +289,41 @@ samplenames <- result_ref[result_ref$patient_id==id,"samplenames"] # change col 
 
 for (samplename in samplenames){
   ggsave(paste0(samplename,"_rcn_profile.png"), plot = plot_genome_cn(rcn_data,cn_col=samplename), width = 16, height = 5, dpi = 300)}
+```
+
+# check NSCLS data
+```{r}
+# multi profile plot
+rcn_data <- read.csv(file.choose(), header = TRUE)
+result_ref <- read.csv(file.choose(), header = TRUE)
+id <- "CRUK0004"
+samplenames <- result_ref[result_ref$patient_id==id,"samplenames"]
+
+rcn_minus <- rcn_data
+rcn_minus[,5:ncol(rcn_data)] <- rcn_data[,5:ncol(rcn_data)] - 1
+ggsave(paste0(id,'_rcn',"_mutli_profile.png"), 
+        plot = plot_genome_cn_multi(rcn_minus,sample_cols=samplenames ,max_cn=1,min_cn=-1), 
+         width = 16, height = 5, dpi = 300)
+```
+```{r}
+# Plot heatmap of paired consine similarity relative copy number in one patient group
+library(pheatmap)
+
+# Define a function to calculate cosine similarity
+cosine_similarity <- function(a, b, w) {
+  sum(a * b * w) / (sqrt(sum(a * a * w)) * sqrt(sum(b * b * w)))
+}
+
+# extract specific samples
+data_val <- rcn_data[,samplenames]
+seg_len <- rcn_data$length
+
+# Compute pairwise function values
+mat <- outer(samplenames, samplenames, Vectorize(function(x, y) cosine_similarity(data_val[[x]], data_val[[y]],seg_len)))
+
+
+# Convert to numeric matrix
+mat <- matrix(as.numeric(mat), nrow = length(samplenames), dimnames = list(samplenames, samplenames))
+
+pheatmap(mat)
 ```

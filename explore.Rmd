@@ -120,15 +120,98 @@ correlation_df <- left_join(sample_counts, group_similarity, by = "group")
 
 # Step 4: compute correlation
 cor_value <- cor(correlation_df$n_samples, correlation_df$mean_similarity, use = "complete.obs")
-
 ```
 ```{r}
+# Plot histogram
 df_col <- read.csv('colorectal_data_cosine_similarity.csv')
 df_EAC <- read.csv('EAC_data_cosine_similarity.csv')
 summary(df_col$cosine_similarity)
 summary(df_EAC$cosine_similarity)
 
 clean_data <- na.omit(df_EAC)
+
+hist(clean_data$cosine_similarity, 
+     main = "Histogram", 
+     xlab = "cosine similarity",
+     breaks = 100,
+     xlim = c(0.9,1))
+```
+
+```{r}
+# Caculate cosine simi for all samples in NSCLS data
+# cosine similarity function
+cosine_similarity <- function(a, b, w) {
+  sum(a * b * w) / (sqrt(sum(a * a * w)) * sqrt(sum(b * b * w)))
+}
+# Function to calculate pairwise cosine similarity within a group
+pairwise_cosine_by_group <- function(group_samples, group_name,df) {
+  n <- length(group_samples)
+  
+    if (n < 2) {
+    # Only one sample — return NA
+    return(data.frame(
+      group = group_name,
+      sample1 = group_samples,
+      sample2 = NA,
+      cosine_similarity = NA_real_
+    ))
+  }
+  
+  res <- data.frame()
+  
+  for (i in 1:(n - 1)) {
+    for (j in (i + 1):n) {
+      sample1 <- group_samples[i]
+      sample2 <- group_samples[j]
+      
+      vec1 <- df[[sample1]]
+      vec2 <- df[[sample2]]
+      
+      sim <- cosine_similarity(vec1, vec2, df$length)
+      
+      res <- rbind(res, data.frame(
+        group = group_name,
+        sample1 = sample1,
+        sample2 = sample2,
+        cosine_similarity = sim
+      ))
+    }
+  }
+  return(res)
+}
+
+# Set the folder path
+folder_path <- "../../Data/TraceX_NSCLS/nscls_segments"
+
+# Get all CSV files in the folder
+csv_files <- list.files(folder_path, pattern = "*.csv", full.names = TRUE)
+
+result <- data.frame(
+      group = character(),
+      sample1 = character(),
+      sample2 = character(),
+      cosine_similarity = numeric()
+    )
+
+# Loop through each file
+for (file in csv_files) {
+  # Load the CSV file
+  data <- read.csv(file)
+  
+  # Get just the filename (without path) for reference
+  filename <- sub("\\.csv$", "", basename(file))
+  
+  group_samples <- colnames(data)[5:ncol(data)]
+  
+  res <- pairwise_cosine_by_group(group_samples, filename, data)
+  
+  result <- rbind(result,res)
+}
+```
+```{r}
+# Plot histogram
+
+clean_data <- na.omit(result)
 
 hist(clean_data$cosine_similarity, 
      main = "Histogram", 

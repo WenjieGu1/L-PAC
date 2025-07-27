@@ -61,15 +61,29 @@ data_id <- data_ref[,c('samplenames','patient_id')]
 
 # functions
 ```{r}
-# Define a function to calculate cosine similarity
-cosine_similarity <- function(a, b) {
-  sum(a * b, na.rm=TRUE) / (sqrt(sum(a * a, na.rm=TRUE)) * sqrt(sum(b * b, na.rm=TRUE)))
+# Define a function to calculate weighted cosine similarity
+cosine_similarity <- function(a, b, w) {
+  sum(a * b * w) / (sqrt(sum(a * a * w)) * sqrt(sum(b * b * w)))
 }
-# LPAC
+
+# Define a function to calculate weighted standard deviation
+sdr <- function(val,len){
+  # Calculate weighted mean
+  weighted_mean <- sum(val * len) / sum(len)
+  
+  # Calculate weighted variance
+  weighted_var <- sum(len * (val - weighted_mean)^2) / sum(len)
+  
+  # Return weighted standard deviation
+  return(sqrt(weighted_var))
+}
+
+# cluster-LPAC
 ## INPUT
 #  bin_val     : Nb x Ns size array containing relative CNA values of bins(not normalized)
 #  of equal size. With Nb the number of bins, and Ns the number of multi-region samples.
 #  seg_val     : Nb x Ns size array containing values of segment length.
+#  Cval        : define the cut-off consine similarity value
 ## OUTPUT: 
 #  LPAC_success: Binary variable with 1 if LPAC inference was succesfull and 0 if unsuccesfull
 #  ploidies    : Ns x 1 size vector containing the tumor ploidies
@@ -79,7 +93,7 @@ cosine_similarity <- function(a, b) {
 #  inference is identified
 # **added a Test to Dtest
 # **changed Dmin value, changed CNH input
-LPAC <- function(bin_val,seg_len=NULL, n_group=1, CNHout=NA, ploidies=NA, purities=NA, sds=NULL) {
+LPAC <- function(bin_val,seg_len=NULL, n_group=1, CNHout=NA, ploidies=NA, purities=NA, sds=NULL, Cval=0.98) {
   
   # Determine sample size and number of bins
   Nb <- nrow(bin_val)
@@ -117,7 +131,7 @@ LPAC <- function(bin_val,seg_len=NULL, n_group=1, CNHout=NA, ploidies=NA, puriti
       CNHout[i] <- result$CNH_out
       ploidies[i] <- result$ploidy_out
       purities[i] <- result$purity_out
-      sds[i] <- sd(bin_val[,i],na.rm=TRUE)
+      sds[i] <- sdr(bin_val[,i],seg_len[,i])
     }
   }
 
@@ -156,13 +170,13 @@ LPAC <- function(bin_val,seg_len=NULL, n_group=1, CNHout=NA, ploidies=NA, puriti
     ids <- which(!best_sample)
     for (i in ids) {
       Dmin <- 1 # define initial minimum absCNA distance
-      Cval <- 0.92 # define the cut-off consine similarity value
+
       D_neverless <- TRUE # define if the distance is never less than Dmin
       bin_val_test <- bin_val[, i]
       seg_len_test <- seg_len[, i]
       
       # Compute cosine similarity of relative copy number
-      Ctest <- cosine_similarity(bin_val_test,bin_val[,best_sample])
+      Ctest <- cosine_similarity(bin_val_test,bin_val[,best_sample],seg_len_test)
       
       # same cluster judgement
       if ((Ctest >= Cval) & (sds[i] > sd_cutoff) ){ 
@@ -389,7 +403,7 @@ refine_search <- function(seg_val, seg_len, ploidy_out, purity_out, refine_range
 ```
 
 ```{r}
-# function to create the segment information
+# function to create a uniform segment length for the inconsistent segment length
 create_sequence_df <- function(df, chrom, max_iterations = 500) {
   # 输入验证
   if(!all(c("start", "end") %in% names(df))) {
@@ -465,7 +479,7 @@ map_values_vectorized <- function(df1, df2, shrink_percent=0) {
   return(df1)
 }
 
-# function to create dataframe of segment value and length
+# function to create dataframe of segment value and length for the inconsistent input data (e.g. each sample has unique segment length)
 ## INPUT
 # splited_data    : a sparse dataframe that contains chromosome, start, end, feature/length and sample column of one patient
 create_segment_val <- function(splited_data){
@@ -520,11 +534,11 @@ library(dplyr)
 # bin_val   : a Nb x Ns dataframe that contains relative copy number of each sample, if segment is TRUE, then bin_val should be raw data
 # seg_len   : a Nb x Ns dataframe that contains segments length of each sample
 # data_id   : a 2 x Ns dataframe that contains samplenames and corresponding patient_id
-# segment   : TRUE means use the create_segment_val fucntion
-# outdir    : output file
+# segment   : TRUE means use the create_segment_val function to handle inconsistent input data
+# path      : output file path
 ## OUTPUT
 # result_df : a dataframe that contains result of LPAC
-run_multi_patient <- function(bin_val,data_id,outdir,seg_len=NULL,segment=FALSE){
+run_multi_patient <- function(bin_val,data_id,path,seg_len=NULL,segment=FALSE){
   # Create an empty data frame to store results
   results_df <- data.frame(patient_id = integer(),
                            sample_name = character(),
@@ -602,10 +616,10 @@ run_multi_patient <- function(bin_val,data_id,outdir,seg_len=NULL,segment=FALSE)
   }
   
   # Output result
-  write.csv(results_df, outdir, row.names = FALSE)
+  write.csv(results_df, path, row.names = FALSE)
 }
-outdir <- "LPAC_v5_tracerx_92_0015_result.csv"
-run_multi_patient(bin_val = data, data_id = data_id, segment = TRUE, outdir = outdir)
+path <- "LPAC_v5_EPICC_92_0015_result.csv"
+run_multi_patient(bin_val = bin_val, data_id = data_id, segment = FALSE, path = path)
 ```
 
 # Run
@@ -634,16 +648,22 @@ mat <- do.call(cbind,result)
 
 ```{r}
 # Transform tracex data into remap data
-
-# Get sample names that belong to specific id
-selected_samples <- data_id %>%
-  filter(patient_id == 'CRUK0003') %>%
-  pull(samplenames)
-
-# Subset bin_val to select columns corresponding to the selected sample names
-splited_data <- cbind(data[,1:4],data[, selected_samples])
-result <- create_segment_val(splited_data)
-output_df <- result$seg_info
+patient_id <- sort(unique(data_ref$patient_id))
+for (id in patient_id){
+  # Get sample names that belong to specific id
+  selected_samples <- data_id %>%
+    filter(patient_id == id) %>%
+    pull(samplenames)
+  
+  # Subset bin_val to select columns corresponding to the selected sample names
+  splited_data <- cbind(data[,1:4],data[, selected_samples])
+  # remap
+  result <- create_segment_val(splited_data)
+  output_df <- result$seg_info
+  # save
+  path <- paste0("nscls_segments/",id,".csv")
+  write.csv(output_df, path, row.names = FALSE)
+}
 ```
 
 

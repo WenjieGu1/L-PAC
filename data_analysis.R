@@ -294,52 +294,75 @@ result_plot_data %>%
 
 # evalutate result(mse)
 ```{r}
-# Evaluate
 # Load data
-# df_data <- read.table(file.choose(), header = TRUE, sep = "\t", comment.char = "#")
-# df_ref <- read.csv(file.choose(), header = TRUE)
+# df_data <- read.table(file.choose(), header = TRUE, sep = "\t", comment.char = "#") # only copy number transform need it
 
-df_ref <- read.table(file.choose(), header = TRUE, sep = "\t")
-# Sort by patient_id, then samplename; only for EAC ref file
+df_ref <- read.csv(file.choose(), header = TRUE) # for EPICC or NSCLS csv file
+
+# df_ref <- read.table(file.choose(), header = TRUE, sep = "\t") # only for EAC table
+# # Sort by patient_id, then samplename; only for EAC and NSCLS ref file
 df_ref <- df_ref[order(df_ref$patient_id, df_ref$samplenames), ]
 
 df_result <- read.csv(file.choose(), header = TRUE)
 ```
+
 ```{r}
+# inference success rate and purity mse
 mse <- function(actual, predicted) {
   mean((actual - predicted)^2,na.rm = TRUE)
 }
 library(dplyr)
 
-# EAC
-success_rate <- nrow(df_result[df_result$LPAC_success ==TRUE,])/nrow(df_result)
-samples_im <- df_ref[!is.na(df_ref$purities_im),"samplenames"]
-
-samples_evaluate <- df_result %>%
-  filter(LPAC_success == TRUE, sample_name %in% samples_im) %>%
-  pull(sample_name)
-
-purity_mse <- mse(df_ref[df_ref$samplenames %in% samples_evaluate,"purities_im"],df_result[df_result$sample_name %in% samples_evaluate,"purities"])
-
-# # EPICC
+# # EAC
 # success_rate <- nrow(df_result[df_result$LPAC_success ==TRUE,])/nrow(df_result)
-# samples_im <- df_ref[!is.na(df_ref$purities),"samplenames"]
+# samples_im <- df_ref[!is.na(df_ref$purities_im),"samplenames"]
 # 
 # samples_evaluate <- df_result %>%
 #   filter(LPAC_success == TRUE, sample_name %in% samples_im) %>%
 #   pull(sample_name)
 # 
-# purity_mse <- mse(df_ref[df_ref$samplenames %in% samples_evaluate,"purities"],df_result[df_result$sample_name %in% samples_evaluate,"purities"])
+# purity_mse <- mse(df_ref[df_ref$samplenames %in% samples_evaluate,"purities_im"],df_result[df_result$sample_name %in% samples_evaluate,"purities"])
+
+# EPICC or NSCLS
+success_rate <- nrow(df_result[df_result$LPAC_success ==TRUE,])/nrow(df_result)
+samples_im <- df_ref[!is.na(df_ref$purities),"samplenames"] # sample that have reference
+
+samples_evaluate <- df_result %>%
+  filter(LPAC_success == TRUE, sample_name %in% samples_im) %>%
+  pull(sample_name)
+
+purity_mse <- mse(df_ref[df_ref$samplenames %in% samples_evaluate,"purities"],df_result[df_result$sample_name %in% samples_evaluate,"purities"])
 ```
+
 ```{r}
-df_lpac <- read.csv(file.choose(), header = TRUE)
+# mse of cluster > 1
+df_lpac <- read.csv(file.choose(), header = TRUE) # load standard LPAC result
+
+# select successful and cluster > 1 and has reference purity sample
 cluster_over1 <- df_result %>%
   filter(LPAC_success == TRUE, cluster > 1, sample_name %in% samples_im) %>%
   pull(sample_name)
 
 
-out_mse <- mse(df_ref[df_ref$samplenames %in% cluster_over1,"purities_im"],df_result[df_result$sample_name %in% cluster_over1,"purities"])
-out_mse2 <- mse(df_ref[df_ref$samplenames %in% cluster_over1,"purities_im"],df_lpac[df_lpac$sample_name %in% cluster_over1,"purities"])
+out_mse <- mse(df_ref[df_ref$samplenames %in% cluster_over1,"purities_im"],df_result[df_result$sample_name %in% cluster_over1,"purities"]) # result of cluster lpac
+out_mse2 <- mse(df_ref[df_ref$samplenames %in% cluster_over1,"purities_im"],df_lpac[df_lpac$sample_name %in% cluster_over1,"purities"]) # result of standard lpac
+```
+
+```{r}
+# mse of ploidy
+# NSCLS
+# inference success rate and purity mse
+mse <- function(actual, predicted) {
+  mean((actual - predicted)^2,na.rm = TRUE)
+}
+library(dplyr)
+samples_im <- df_ref[!is.na(df_ref$ploidies),"samplenames"]
+
+samples_evaluate <- df_result %>%
+  filter(LPAC_success == TRUE, sample_name %in% samples_im) %>%
+  pull(sample_name)
+
+ploidy_mse <- mse(df_ref[df_ref$samplenames %in% samples_evaluate,"ploidies"],df_result[df_result$sample_name %in% samples_evaluate,"ploidies"])
 ```
 
 
@@ -412,5 +435,60 @@ boxplot <- result_plot_data %>%
     xlab("")
 
 ggsave("EPICC_90_02_mse_boxplot.png", plot = boxplot, width = 14, height = 5, dpi = 300)
+```
+
+```{r}
+# metric plot
+
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(patchwork)
+
+# 创建数据框
+df <- data.frame(
+  data_method = c("L-PAC on EAC", "cluster-LPAC on EAC",
+                  "L-PAC on EPICC", "cluster-LPAC on EPICC",
+                  "L-PAC on NSCLS", "cluster-LPAC on NSCLS"),
+  dataset = c("EAC", "EAC", "EPICC", "EPICC", "NSCLS", "NSCLS"),
+  method = c("L-PAC", "cluster-LPAC", "L-PAC", "cluster-LPAC", "L-PAC", "cluster-LPAC"),
+  successful_inference_rate = c(0.85875, 0.77401, 0.75971, 0.75618, 0.82838, 0.83498),
+  mse_successful = c(0.13357, 0.07123, 0.04434, 0.04351, 0.08625, 0.03889),
+  mse_excluded = c(0.40684, 0.13761, NA, NA, NA, NA)
+)
+
+# 转换成长格式
+df_long <- df %>%
+  pivot_longer(cols = c(successful_inference_rate, mse_successful, mse_excluded),
+               names_to = "metric", values_to = "value")
+
+# 画图函数
+plot_metric <- function(metric_name, custom_title) {
+  df_plot <- df_long %>% filter(metric == metric_name)
+
+  ggplot(df_plot, aes(x = dataset, y = value, fill = method)) +
+    geom_bar(stat = "identity", 
+             position = position_dodge(width = 0.8), 
+             width = 0.8) +  # 减小 bar 宽度避免重叠
+    labs(title = custom_title, x = "Dataset", y = "Value") +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 30, hjust = 1))
+}
+
+# 使用自定义标题调用
+plot1 <- plot_metric("successful_inference_rate", "Successful Inference Rate")
+plot2 <- plot_metric("mse_successful", "MSE on Successfully Inferred Samples")
+plot3 <- plot_metric("mse_excluded", "MSE on Samples Excluded from Cluster 1")
+
+# 并排组合，并合并图例，放在下方
+combined_plot <- (plot1 + plot2 + plot3) +
+  plot_layout(ncol = 3, guides = "collect") & 
+  theme(legend.position = "bottom")
+
+# 保存图片
+ggsave("metric_barplots.png", plot = combined_plot, width = 16, height = 5, dpi = 300)
+
+
+
 ```
 

@@ -118,10 +118,6 @@ plot_genome_cn_multi <- function(data,
   y_min <- if (!is.null(min_cn)) min_cn else floor(min(data_offset$CopyNumber, na.rm = TRUE)) - 0.5
   y_max <- if (!is.null(max_cn)) max_cn else ceiling(max(data_offset$CopyNumber, na.rm = TRUE)) + 0.5
   
-  # caculate consine
-  cos1 <- round(cosine_similarity(data[,sample_cols[1]],data[,sample_cols[2]]),2)
-  cos2 <- round(cosine_similarity(data[,sample_cols[1]],data[,sample_cols[3]]),2)
-  
   # plot
   p <- ggplot(data_offset, aes(x = Start_genome, xend = End_genome, y = CopyNumber, yend = CopyNumber, color = Sample)) +
     geom_segment(size = line_size) +

@@ -64,7 +64,15 @@ data_id <- data_ref[,c('samplenames','patient_id')]
 library(ggplot2)
 library(tidyr)
 
-
+# A main function to run cluster-LPAC and plot profile
+## INPUT
+#  bin_val     : Nb x Ns size array containing relative CNA values of bins(not normalized)
+#  of equal size. With Nb the number of bins, and Ns the number of multi-region samples.
+#  seg_val     : Nb x Ns size array containing values of segment length.
+#  Cval        : define the cut-off consine similarity value
+#  Dmin        : define initial minimum absCNA distance(CNH)
+#  plot        : TRUE means plotting absolute copy number profile
+#  seg_info    : dataframe that contains chromosome, start, end and feature columns
 cluster_lpac_main <- function(bin_val,seg_len=NULL, Cval=0.96, Dmin=1, plot=FALSE, seg_info=NULL, img_path){
   result <- cluster_LPAC(bin_val = bin_val, seg_len = seg_len, Cval = Cval, Dmin = Dmin)
   if (plot){
@@ -215,8 +223,6 @@ plot_genome_cn_multi <- function(data,
 #  CNH         : Ns x 1 size vector containing the copy number heterogeneity
 #  best_sample : Ns x 1 size binary vector in which the best sample used for multi-region 
 #  inference is identified
-# **added a Test to Dtest
-# **changed Dmin value, changed CNH input
 cluster_LPAC <- function(bin_val,seg_len=NULL, n_group=1, CNHout=NA, ploidies=NA, purities=NA, sds=NULL, Cval=0.96, Dmin=1) {
   
   # Determine sample size and number of bins

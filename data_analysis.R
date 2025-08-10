@@ -364,6 +364,19 @@ samples_evaluate <- df_result %>%
 
 ploidy_mse <- mse(df_ref[df_ref$samplenames %in% samples_evaluate,"ploidies"],df_result[df_result$sample_name %in% samples_evaluate,"ploidies"])
 ```
+```{r}
+# mse of cluster > 1
+df_lpac <- read.csv(file.choose(), header = TRUE) # load standard LPAC result
+
+# select successful and cluster > 1 and has reference purity sample
+cluster_over1 <- df_result %>%
+  filter(LPAC_success == TRUE, cluster > 1, sample_name %in% samples_im) %>%
+  pull(sample_name)
+
+
+out_mse <- mse(df_ref[df_ref$samplenames %in% cluster_over1,"ploidies"],df_result[df_result$sample_name %in% cluster_over1,"ploidies"]) # result of cluster lpac
+out_mse2 <- mse(df_ref[df_ref$samplenames %in% cluster_over1,"ploidies"],df_lpac[df_lpac$sample_name %in% cluster_over1,"ploidies"]) # result of standard lpac
+```
 
 
 
@@ -438,66 +451,136 @@ ggsave("EPICC_90_02_mse_boxplot.png", plot = boxplot, width = 14, height = 5, dp
 ```
 
 ```{r}
-# metric plot
-
 library(ggplot2)
 library(dplyr)
 library(tidyr)
 library(patchwork)
 
-# 创建数据框
-# df <- data.frame(
-#   data_method = c("L-PAC on EAC", "cluster-LPAC on EAC",
-#                   "L-PAC on EPICC", "cluster-LPAC on EPICC",
-#                   "L-PAC on NSCLC", "cluster-LPAC on NSCLS"),
-#   dataset = c("EAC", "EAC", "EPICC", "EPICC", "NSCLC", "NSCLC"),
-#   method = c("L-PAC", "cluster-LPAC", "L-PAC", "cluster-LPAC", "L-PAC", "cluster-LPAC"),
-#   successful_inference_rate = c(0.85875, 0.77401, 0.75971, 0.70671, 0.82838, 0.73927),
-#   mse_successful = c(0.09267, 0.07123, 0.04434, 0.02653, 0.08625, 0.04029),
-#   mse_excluded = c(0.40684, 0.13761, 0.02966, 0.02609, 0.07018, 0.05406)
-# )
+# 数据
 df <- data.frame(
   data_method = c("L-PAC on EAC", "cluster-LPAC on EAC",
                   "L-PAC on EPICC", "cluster-LPAC on EPICC",
                   "L-PAC on NSCLC", "cluster-LPAC on NSCLS"),
   dataset = c("EAC", "EAC", "EPICC", "EPICC", "NSCLC", "NSCLC"),
   method = c("L-PAC", "cluster-LPAC", "L-PAC", "cluster-LPAC", "L-PAC", "cluster-LPAC"),
-  successful_inference_rate = c(0.85875, 0.77401, 0.75971, 0.75618, 0.82838, 0.83498),
-  mse_successful = c(0.09267, 0.07123, 0.04434, 0.04351, 0.08625, 0.03889),
-  mse_excluded = c(0.40684, 0.13761, NA, NA, NA, NA)
+  successful_inference_rate = c(0.85875, 0.77401, 0.75971, 0.70671, 0.82838, 0.73927),
+  pu_mse_successful = c(0.09267, 0.07123, 0.04434, 0.02653, 0.08625, 0.04029),
+  pu_mse_excluded = c(0.40684, 0.13761, 0.02966, 0.02609, 0.07018, 0.05406),
+  pl_mse_successful = c(NA, NA, 0.58769, 0.48735, 1.53469, 1.55203),
+  pl_mse_excluded = c(NA, NA, 0.6735, 0.49550, 1.48014, 1.52152)
 )
-# 转换成长格式
+
+# 转成长格式
 df_long <- df %>%
-  pivot_longer(cols = c(successful_inference_rate, mse_successful, mse_excluded),
-               names_to = "metric", values_to = "value")
+  pivot_longer(
+    cols = c(successful_inference_rate, pu_mse_successful, pu_mse_excluded,
+             pl_mse_successful, pl_mse_excluded),
+    names_to = "metric",
+    values_to = "value"
+  )
+
+# Thesis-friendly theme
+theme_thesis <- function() {
+  theme_minimal(base_family = "serif", base_size = 14) +
+    theme(
+      plot.title = element_text(face = "bold", size = 16, hjust = 0.5),
+      axis.title = element_text(face = "bold", size = 14),
+      axis.text = element_text(size = 12),
+      axis.text.x = element_text(angle = 30, hjust = 1, vjust = 1),
+      legend.title = element_text(face = "bold", size = 13),
+      legend.text = element_text(size = 12),
+      panel.grid.major = element_line(color = "grey85"),
+      panel.grid.minor = element_blank(),
+      plot.margin = margin(10, 10, 10, 10)
+    )
+}
 
 # 画图函数
 plot_metric <- function(metric_name, custom_title) {
   df_plot <- df_long %>% filter(metric == metric_name)
 
   ggplot(df_plot, aes(x = dataset, y = value, fill = method)) +
-    geom_bar(stat = "identity", 
-             position = position_dodge(width = 0.8), 
-             width = 0.8) +  # 减小 bar 宽度避免重叠
+    geom_bar(stat = "identity", position = position_dodge(width = 0.7), width = 0.6) +
     labs(title = custom_title, x = "Dataset", y = "Value") +
-    theme_minimal() +
-    theme(axis.text.x = element_text(angle = 30, hjust = 1))
+    scale_fill_manual(values = c("#1B9E77", "#D95F02")) + # Muted thesis colors
+    theme_thesis()
 }
 
-# 使用自定义标题调用
+# 绘图
 plot1 <- plot_metric("successful_inference_rate", "Successful Inference Rate")
-plot2 <- plot_metric("mse_successful", "MSE of Successfully Inferred Samples")
-plot3 <- plot_metric("mse_excluded", "MSE of Samples Excluded from Cluster 1")
+plot2 <- plot_metric("pu_mse_successful", "Purity MSE (Successful Inference)")
+plot3 <- plot_metric("pu_mse_excluded", "Purity MSE (Non-main Samples)")
+plot4 <- plot_metric("pl_mse_successful", "Ploidy MSE (Successful Inference)")
+plot5 <- plot_metric("pl_mse_excluded", "Ploidy MSE (Non-main Samples)")
 
-# 并排组合，并合并图例，放在下方
-combined_plot <- (plot1 + plot2 + plot3) +
-  plot_layout(ncol = 3, guides = "collect") & 
+# 组合
+combined_plot <- (plot1 + plot2 + plot3 + plot4 + plot5) +
+  plot_layout(ncol = 3, guides = "collect") &
   theme(legend.position = "bottom")
 
-# 保存图片
-ggsave("metric_barplots.png", plot = combined_plot, width = 16, height = 5, dpi = 300)
+# 保存
+ggsave("metric_barplots3.png", plot = combined_plot,
+       width = 12, height = 6, dpi = 300)
 
 
 
 ```
+
+```{r}
+# 输入数据
+data <- data.frame(
+  CSR_cutoff = c(0.92, 0.93, 0.94, 0.95, 0.96),
+  successful_inference_rate = c(0.77401, 0.54237, 0.53107, 0.51412, 0.49717),
+  MSE_purity_inferred = c(0.07123, 0.06046, 0.06081, 0.06816, 0.07151),
+  MSE_purity_excluded = c(0.13761, 0.05697, 0.05697, 0.07033, 0.07856)
+)
+
+library(ggplot2)
+
+# 比例系数
+scaleFactor <- max(data$successful_inference_rate) / max(c(data$MSE_purity_inferred, data$MSE_purity_excluded))
+
+line_plot <- ggplot(data, aes(x = CSR_cutoff)) +
+  # 左轴
+  geom_line(aes(y = successful_inference_rate, color = "Successful inference rate", linetype = "solid"), size = 1.5) +
+  geom_point(aes(y = successful_inference_rate, color = "Successful inference rate", shape = "Successful inference rate"), size = 4) +
+  
+  # 右轴
+  geom_line(aes(y = MSE_purity_inferred * scaleFactor, color = "MSE purity (successful inference)", linetype = "dashed"), size = 1.5) +
+  geom_point(aes(y = MSE_purity_inferred * scaleFactor, color = "MSE purity (successful inference)", shape = "MSE purity (successful inference)"), size = 4) +
+  
+  geom_line(aes(y = MSE_purity_excluded * scaleFactor, color = "MSE purity (non-main samples)", linetype = "dashed"), size = 1.5) +
+  geom_point(aes(y = MSE_purity_excluded * scaleFactor, color = "MSE purity (non-main samples)", shape = "MSE purity (non-main samples)"), size = 4) +
+  
+  scale_y_continuous(
+    name = "Successful inference rate",
+    sec.axis = sec_axis(~./scaleFactor, name = "MSE purity")
+  ) +
+  scale_color_manual(values = c(
+    "Successful inference rate" = "#1f77b4",  # 柔和蓝
+    "MSE purity (successful inference)" = "#d62728",      # 柔和红
+    "MSE purity (non-main samples)" = "#2ca02c"       # 柔和绿
+  )) +
+  scale_shape_manual(values = c(
+    "Successful inference rate" = 16,   # 实心圆
+    "MSE purity (successful inference)" = 17,       # 实心三角
+    "MSE purity (non-main samples)" = 15        # 实心方块
+  )) +
+  scale_linetype_identity() +
+  theme_classic(base_size = 16) +  # 论文风格
+  theme(
+    axis.line = element_line(size = 1),
+    axis.ticks = element_line(size = 1),
+    legend.key = element_blank(),
+    legend.position = "top",
+    legend.title = element_blank()
+  ) +
+  labs(
+    title = "CSR cutoff vs Metrics",
+    x = "CSR cutoff"
+  )
+
+ggsave("CSR_cutoff.png", plot = line_plot, width = 8, height = 5, dpi = 300)
+```
+
 

@@ -223,7 +223,7 @@ plot_genome_cn_multi <- function(data,
 #  CNH         : Ns x 1 size vector containing the copy number heterogeneity
 #  best_sample : Ns x 1 size binary vector in which the best sample used for multi-region 
 #  inference is identified
-cluster_LPAC <- function(bin_val,seg_len=NULL, n_group=1, CNHout=NA, ploidies=NA, purities=NA, sds=NULL, Cval=0.96, Dmin=1) {
+cluster_LPAC <- function(bin_val,seg_len=NULL, n_group=1, CNHout=NA, ploidies=NA, purities=NA, sds=NULL, Cval=0.95, Dmin=1) {
   
   # Determine sample size and number of bins
   Nb <- nrow(bin_val)
@@ -749,7 +749,7 @@ run_multi_patient <- function(bin_val,data_id,path,seg_len=NULL,segment=FALSE){
   # Output result
   write.csv(results_df, path, row.names = FALSE)
 }
-path <- "LPAC_v5_EPICC_96_0015_result.csv"
+path <- "LPAC_v5_EAC_95_0015_result.csv"
 run_multi_patient(bin_val = bin_val, data_id = data_id, segment = FALSE, path = path)
 ```
 

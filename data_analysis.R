@@ -515,12 +515,12 @@ plot5 <- plot_metric("pl_mse_excluded", "Ploidy MSE (Non-main Samples)")
 
 # 组合
 combined_plot <- (plot1 + plot2 + plot3 + plot4 + plot5) +
-  plot_layout(ncol = 3, guides = "collect") &
+  plot_layout(ncol = 2, guides = "collect") &
   theme(legend.position = "bottom")
 
 # 保存
 ggsave("metric_barplots3.png", plot = combined_plot,
-       width = 12, height = 6, dpi = 300)
+       width = 8, height = 10, dpi = 300)
 
 
 
@@ -529,10 +529,10 @@ ggsave("metric_barplots3.png", plot = combined_plot,
 ```{r}
 # 输入数据
 data <- data.frame(
-  CSR_cutoff = c(0.92, 0.93, 0.94, 0.95, 0.96),
-  successful_inference_rate = c(0.77401, 0.54237, 0.53107, 0.51412, 0.49717),
-  MSE_purity_inferred = c(0.07123, 0.06046, 0.06081, 0.06816, 0.07151),
-  MSE_purity_excluded = c(0.13761, 0.05697, 0.05697, 0.07033, 0.07856)
+  CSR_cutoff = c(0.90, 0.91, 0.92, 0.93, 0.94, 0.95, 0.96),
+  successful_inference_rate = c(0.53672, 0.53672, 0.77401, 0.54237, 0.53107, 0.51412, 0.49717),
+  MSE_purity_inferred = c(0.05979, 0.05979, 0.07123, 0.06046, 0.06081, 0.06816, 0.07151),
+  MSE_purity_excluded = c(0.05509, 0.05509, 0.13761, 0.05697, 0.05697, 0.07033, 0.07856)
 )
 
 library(ggplot2)

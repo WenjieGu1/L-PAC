@@ -223,8 +223,8 @@ plot_genome_cn_multi <- function(data,
 #  CNH         : Ns x 1 size vector containing the copy number heterogeneity
 #  best_sample : Ns x 1 size binary vector in which the best sample used for multi-region 
 #  inference is identified
-cluster_LPAC <- function(bin_val,seg_len=NULL, n_group=1, CNHout=NA, ploidies=NA, purities=NA, sds=NULL, Cval=0.95, Dmin=1) {
-  
+cluster_LPAC <- function(bin_val,seg_len=NULL, n_group=1, CNHout=NA, ploidies=NA, purities=NA, sds=NULL, Cval) {
+  print(Cval)
   # Determine sample size and number of bins
   Nb <- nrow(bin_val)
   Ns <- ncol(bin_val)
@@ -299,6 +299,7 @@ cluster_LPAC <- function(bin_val,seg_len=NULL, n_group=1, CNHout=NA, ploidies=NA
     # Loop over non-best samples
     ids <- which(!best_sample)
     for (i in ids) {
+      Dmin <- 1
       D_neverless <- TRUE # define if the distance is never less than Dmin
       bin_val_test <- bin_val[, i]
       seg_len_test <- seg_len[, i]
@@ -342,6 +343,7 @@ cluster_LPAC <- function(bin_val,seg_len=NULL, n_group=1, CNHout=NA, ploidies=NA
       # useless sample judgement
       if (sds[i] < sd_cutoff){
         success_list[i] <- FALSE
+        cluster[i] <- NA
       }
     }
       
@@ -356,7 +358,8 @@ cluster_LPAC <- function(bin_val,seg_len=NULL, n_group=1, CNHout=NA, ploidies=NA
                          CNHout=CNHout[new_cluster_id], 
                          ploidies=ploidies[new_cluster_id], 
                          purities=purities[new_cluster_id],
-                         sds=sds[new_cluster_id])
+                         sds=sds[new_cluster_id],
+                         Cval = Cval)
       success_list[new_cluster_id] <- new_result$LPAC_success
       ploidies[new_cluster_id] <- new_result$ploidies
       purities[new_cluster_id] <- new_result$purities
@@ -669,7 +672,7 @@ library(dplyr)
 # path      : output file path
 ## OUTPUT
 # result_df : a dataframe that contains result of LPAC
-run_multi_patient <- function(bin_val,data_id,path,seg_len=NULL,segment=FALSE){
+run_multi_patient <- function(bin_val,data_id,path,seg_len=NULL,segment=FALSE, Cval){
   # Create an empty data frame to store results
   results_df <- data.frame(patient_id = integer(),
                            sample_name = character(),
@@ -711,7 +714,7 @@ run_multi_patient <- function(bin_val,data_id,path,seg_len=NULL,segment=FALSE){
     # Use tryCatch to handle errors
     result <- tryCatch({
       # Apply the LPAC function
-      cluster_LPAC(bin_val = splited_data, seg_len = splited_len)
+      cluster_LPAC(bin_val = splited_data, seg_len = splited_len, Cval = Cval)
     }, error = function(e) {
       # In case of error, return NULL or some default value
       message(paste("Error with patient_id:", id, "-", conditionMessage(e)))  # Print message without stopping
@@ -749,8 +752,8 @@ run_multi_patient <- function(bin_val,data_id,path,seg_len=NULL,segment=FALSE){
   # Output result
   write.csv(results_df, path, row.names = FALSE)
 }
-path <- "LPAC_v5_EAC_95_0015_result.csv"
-run_multi_patient(bin_val = bin_val, data_id = data_id, segment = FALSE, path = path)
+path <- "LPAC_v6_test.csv"
+run_multi_patient(bin_val = bin_val, data_id = data_id, segment = FALSE, path = path, Cval = 0.93)
 ```
 
 # Run

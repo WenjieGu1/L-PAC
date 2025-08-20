@@ -94,7 +94,7 @@ sdr <- function(val,len){
 #  inference is identified
 # **added a Test to Dtest
 # **changed Dmin value, changed CNH input
-cluster_LPAC <- function(bin_val,seg_len=NULL, n_group=1, CNHout=NA, ploidies=NA, purities=NA, sds=NULL, Cval=0.96, Dmin=1) {
+cluster_LPAC <- function(bin_val,seg_len=NULL, n_group=1, CNHout=NA, ploidies=NA, purities=NA, sds=NULL, Cval=0.92) {
   
   # Determine sample size and number of bins
   Nb <- nrow(bin_val)
@@ -170,6 +170,7 @@ cluster_LPAC <- function(bin_val,seg_len=NULL, n_group=1, CNHout=NA, ploidies=NA
     # Loop over non-best samples
     ids <- which(!best_sample)
     for (i in ids) {
+      Dmin <- 1
       D_neverless <- TRUE # define if the distance is never less than Dmin
       bin_val_test <- bin_val[, i]
       seg_len_test <- seg_len[, i]
@@ -197,7 +198,7 @@ cluster_LPAC <- function(bin_val,seg_len=NULL, n_group=1, CNHout=NA, ploidies=NA
             }
           }
         }
-        
+
         # if distance is less than Dmin, refine result and compute CNH
         if (!D_neverless) {
           refine_result <- refine_search(bin_val_test,seg_len_test,ploidies[i],purities[i])
@@ -213,6 +214,7 @@ cluster_LPAC <- function(bin_val,seg_len=NULL, n_group=1, CNHout=NA, ploidies=NA
       # useless sample judgement
       if (sds[i] < sd_cutoff){
         success_list[i] <- FALSE
+        cluster[i] <- NA
       }
     }
       
@@ -227,7 +229,8 @@ cluster_LPAC <- function(bin_val,seg_len=NULL, n_group=1, CNHout=NA, ploidies=NA
                          CNHout=CNHout[new_cluster_id], 
                          ploidies=ploidies[new_cluster_id], 
                          purities=purities[new_cluster_id],
-                         sds=sds[new_cluster_id])
+                         sds=sds[new_cluster_id],
+                         Cval = Cval)
       success_list[new_cluster_id] <- new_result$LPAC_success
       ploidies[new_cluster_id] <- new_result$ploidies
       purities[new_cluster_id] <- new_result$purities
@@ -329,10 +332,10 @@ CNH <- function(seg_val, seg_len, ploidy = NULL, purity = NULL) {
   
   # refine result
   refine_result <- refine_search(seg_val, seg_len, ploidy_out, purity_out)
-  
+
   # Return results as a named list
-  return(list(CNH_out = refine_result$CNH, 
-              ploidy_out = refine_result$ploidy, 
+  return(list(CNH_out = refine_result$CNH,
+              ploidy_out = refine_result$ploidy,
               purity_out = refine_result$purity))
 }
 
@@ -617,7 +620,7 @@ run_multi_patient <- function(bin_val,data_id,path,seg_len=NULL,segment=FALSE){
   # Output result
   write.csv(results_df, path, row.names = FALSE)
 }
-path <- "LPAC_v5_EPICC_96_0015_result.csv"
+path <- "LPAC_v5_EAC_92_0015_result(test2).csv"
 run_multi_patient(bin_val = bin_val, data_id = data_id, segment = FALSE, path = path)
 ```
 
@@ -628,7 +631,7 @@ library(dplyr)
 
 # Get sample names that belong to specific id
 selected_samples <- data_id %>%
-  filter(patient_id == 'C547') %>%
+  filter(patient_id == 10) %>%
   pull(samplenames)
 
 # # Subset bin_val to select columns corresponding to the selected sample names

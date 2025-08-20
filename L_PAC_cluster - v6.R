@@ -73,8 +73,8 @@ library(tidyr)
 #  Dmin        : define initial minimum absCNA distance(CNH)
 #  plot        : TRUE means plotting absolute copy number profile
 #  seg_info    : dataframe that contains chromosome, start, end and feature columns
-cluster_lpac_main <- function(bin_val,seg_len=NULL, Cval=0.96, Dmin=1, plot=FALSE, seg_info=NULL, img_path){
-  result <- cluster_LPAC(bin_val = bin_val, seg_len = seg_len, Cval = Cval, Dmin = Dmin)
+cluster_lpac_main <- function(bin_val,seg_len=NULL, Cval=0.96, plot=FALSE, seg_info=NULL, img_path){
+  result <- cluster_LPAC(bin_val = bin_val, seg_len = seg_len, Cval = Cval)
   if (plot){
     if(is.null(seg_info)){stop(paste("Plot requires seg_info"))}
     plot_profile(bin_val,seg_info,result)

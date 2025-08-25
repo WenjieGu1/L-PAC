@@ -302,11 +302,10 @@ df_ref <- read.table(file.choose(), header = TRUE, sep = "\t") # only for EAC ta
 
 # Sort by patient_id, then samplename; only for EAC and NSCLS ref file
 df_ref <- df_ref[order(df_ref$patient_id, df_ref$samplenames), ]
-
-df_result <- read.csv(file.choose(), header = TRUE)
 ```
-
 ```{r}
+df_result <- read.csv(file.choose(), header = TRUE)
+
 # inference success rate and purity mse
 mse <- function(actual, predicted) {
   mean((actual - predicted)^2,na.rm = TRUE)
@@ -450,6 +449,7 @@ boxplot <- result_plot_data %>%
 ggsave("EPICC_90_02_mse_boxplot.png", plot = boxplot, width = 14, height = 5, dpi = 300)
 ```
 
+# performance comparison
 ```{r}
 library(ggplot2)
 library(dplyr)
@@ -463,9 +463,9 @@ df <- data.frame(
                   "L-PAC on NSCLC", "cluster-LPAC on NSCLS"),
   dataset = c("EAC", "EAC", "EPICC", "EPICC", "NSCLC", "NSCLC"),
   method = c("L-PAC", "cluster-LPAC", "L-PAC", "cluster-LPAC", "L-PAC", "cluster-LPAC"),
-  successful_inference_rate = c(0.85875, 0.77401, 0.75971, 0.70671, 0.82838, 0.73927),
-  pu_mse_successful = c(0.09267, 0.07123, 0.04434, 0.02653, 0.08625, 0.04029),
-  pu_mse_excluded = c(0.40684, 0.13761, 0.02966, 0.02609, 0.07018, 0.05406),
+  successful_inference_rate = c(0.85875, 0.77966, 0.75971, 0.70671, 0.82838, 0.73927),
+  pu_mse_successful = c(0.09267, 0.07061, 0.04434, 0.02653, 0.08625, 0.04029),
+  pu_mse_excluded = c(0.36170, 0.12379, 0.02966, 0.02609, 0.07018, 0.05406),
   pl_mse_successful = c(NA, NA, 0.58769, 0.48735, 1.53469, 1.55203),
   pl_mse_excluded = c(NA, NA, 0.6735, 0.49550, 1.48014, 1.52152)
 )
@@ -519,20 +519,21 @@ combined_plot <- (plot1 + plot2 + plot3 + plot4 + plot5) +
   theme(legend.position = "bottom")
 
 # 保存
-ggsave("metric_barplots3.png", plot = combined_plot,
+ggsave("metric_barplots.png", plot = combined_plot,
        width = 8, height = 10, dpi = 300)
 
 
 
 ```
 
+# CSR cutoff
 ```{r}
 # 输入数据
 data <- data.frame(
-  CSR_cutoff = c(0.90, 0.91, 0.92, 0.93, 0.94, 0.95, 0.96),
-  successful_inference_rate = c(0.53672, 0.53672, 0.77401, 0.54237, 0.53107, 0.51412, 0.49717),
-  MSE_purity_inferred = c(0.05979, 0.05979, 0.07123, 0.06046, 0.06081, 0.06816, 0.07151),
-  MSE_purity_excluded = c(0.05509, 0.05509, 0.13761, 0.05697, 0.05697, 0.07033, 0.07856)
+  CSR_cutoff = c(0.91, 0.92, 0.93, 0.94, 0.95, 0.96),
+  successful_inference_rate = c( 0.77966, 0.77401, 0.77966, 0.76836, 0.76271, 0.74576),
+  MSE_purity_inferred = c(0.07101, 0.07123, 0.07061, 0.07240, 0.07298, 0.07275),
+  MSE_purity_excluded = c(0.13761, 0.13761, 0.12379, 0.10679, 0.09679, 0.09679)
 )
 
 library(ggplot2)
@@ -582,5 +583,103 @@ line_plot <- ggplot(data, aes(x = CSR_cutoff)) +
 
 ggsave("CSR_cutoff.png", plot = line_plot, width = 8, height = 5, dpi = 300)
 ```
+
+
+# dataset analysis
+```{r}
+library(dplyr)
+df <- read.csv(file.choose(), header = TRUE)
+
+total_fail <- sum(df$LPAC_success == FALSE)
+
+r1 <- df %>% filter(LPAC_success==FALSE, is.na(best_sample)) %>% nrow()
+
+r2 <- df %>% filter(LPAC_success==FALSE, !is.na(best_sample), !is.na(cluster)) %>% nrow()
+
+r3 <- df %>% filter(LPAC_success==FALSE, is.na(cluster)) %>% nrow()
+
+c2 <- df %>% filter(LPAC_success==FALSE, !is.na(best_sample), cluster>1) %>% nrow()
+```
+```{r}
+library(tidyr)
+library(ggplot2)
+df1 <- read.csv(file.choose(), header = TRUE)
+df2 <- read.csv(file.choose(), header = TRUE)
+df3 <- read.csv(file.choose(), header = TRUE)
+df1$patient_id <- as.character(df1$patient_id)
+```
+```{r}
+df <- rbind(df1,df2,df3)
+
+cluster1_fail <- df %>% filter(LPAC_success==FALSE, cluster==1) %>% nrow()
+cluster1 <- df %>% filter(cluster==1) %>% nrow()
+
+cluster2_fail <- df %>% filter(LPAC_success==FALSE, cluster>1) %>% nrow()
+cluster2 <- df %>% filter(cluster>1) %>% nrow()
+```
+
+```{r}
+# the highest cluster number for each patient
+library(dplyr)
+new_df1 <- df1 %>%
+  group_by(patient_id) %>%
+  summarise(cluster = max(cluster, na.rm = TRUE), .groups = "drop")
+
+new_df2 <- df2 %>%
+  group_by(patient_id) %>%
+  summarise(cluster = max(cluster, na.rm = TRUE), .groups = "drop")
+
+new_df3 <- df3 %>%
+  group_by(patient_id) %>%
+  summarise(cluster = max(cluster, na.rm = TRUE), .groups = "drop")
+```
+
+
+```{r}
+# 假设你的数据框叫 df1, df2, df3，都有列 `cluster`
+lst <- list(EAC = new_df1, EPICC = new_df2, NSCLC = new_df3)
+
+# 合并并标记来源；排除 NA；统计频数
+counts <- bind_rows(lst, .id = "dataset") %>%
+  filter(!is.na(cluster)) %>%
+  mutate(cluster = as.integer(cluster)) %>%                     # 确保是整数
+  count(dataset, cluster, name = "n")
+
+# 保证每个数据框对所有出现过的 cluster 都有一行（没有的补 0），并设定有序的 x 轴
+all_levels <- sort(unique(counts$cluster))
+counts <- counts %>%
+  complete(dataset, cluster = all_levels, fill = list(n = 0)) %>%
+  mutate(cluster = factor(cluster, levels = all_levels))
+
+# 画图：无边框、鲜明配色、背景网格、x 轴与 0 对齐、标注频数
+pd <- position_dodge(width = 0.8)
+
+p <- ggplot(counts, aes(x = cluster, y = n, fill = dataset)) +
+  geom_col(position = pd, width = 0.7) +                        # 柱子无边框（默认 color=NA）
+  geom_text(aes(label = n), position = pd, vjust = -0.25, size = 3.8) +
+  scale_fill_manual(values = c("#1f77b4", "#ff7f0e", "#2ca02c")) +   # 鲜明配色：蓝/橙/绿
+  theme_bw(base_size = 14) +
+  labs(
+    title = "Cluster Frequency Across Three Datasets",
+    x = "Cluster",
+    y = "Frequency",
+    fill = "Dataset"
+  ) +
+  theme(
+    panel.grid.major = element_line(color = "grey70", size = 0.4),
+    panel.grid.minor = element_line(color = "grey85", size = 0.2),
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 16),
+    axis.text = element_text(color = "black"),
+    axis.title = element_text(face = "bold")
+  ) +
+  expand_limits(y = 0) +                                        # y 轴从 0 开始
+  scale_y_continuous(expand = expansion(mult = c(0, 0.08)))     # 顶部留白给数字
+
+p
+
+# 保存（示例：高分辨率 PNG）
+ggsave("cluster_grouped_bar.png", p, width = 7, height = 4.8, dpi = 300)
+```
+
 
 

@@ -751,8 +751,15 @@ run_multi_patient <- function(bin_val,data_id,path,seg_len=NULL,segment=FALSE, C
   # Output result
   write.csv(results_df, path, row.names = FALSE)
 }
-path <- "LPAC_v6_EAC_93.csv"
-run_multi_patient(bin_val = bin_val, data_id = data_id, segment = FALSE, path = path, Cval = 0.93)
+path <- "LPAC_v6_EAC_0.96.csv"
+run_multi_patient(bin_val = bin_val, data_id = data_id, segment = FALSE, path = path, Cval = 0.96)
+
+# # loop for various Cval
+# for(i in seq(0.93,0.96,by=0.01)){
+#   path <- paste0('LPAC_v6_EAC_',i,'.csv')
+#   print(i)
+#   run_multi_patient(bin_val = bin_val, data_id = data_id, segment = FALSE, path = path, Cval = i)
+# }
 ```
 
 # Run
